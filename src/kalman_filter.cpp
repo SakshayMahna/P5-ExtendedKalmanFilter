@@ -1,4 +1,5 @@
 #include "kalman_filter.h"
+#include <iostream>
 
 using Eigen::MatrixXd;
 using Eigen::VectorXd;
@@ -35,7 +36,7 @@ void KalmanFilter::Update(const VectorXd &z) {
   MatrixXd S = H_ * P_ * Ht + R_;
   MatrixXd Si = S.inverse();
   MatrixXd K = P_ * Ht * Si;
-  MatrixXd I = MatrixXd::Identity(2, 2);
+  MatrixXd I = MatrixXd::Identity(4, 4);
 
   // Update state
   x_ = x_ + (K * y);
@@ -44,23 +45,35 @@ void KalmanFilter::Update(const VectorXd &z) {
 
 void KalmanFilter::UpdateEKF(const VectorXd &z) {
   // Auxillary variables
-  float px = x_(0), py = x_(1);
-  float vx = x_(2), vy = x_(3);
+  double px = x_(0), py = x_(1);
+  double vx = x_(2), vy = x_(3);
 
-  // Calculate h(x) and Jacobian
-  VectorXd h << sqrt(px * px + py * py), atan2(py, px),
-                (px * vx + py * vy) / sqrt(px * px + py * py);
-  MatrixXd Hj = CalculateJacobian(x_);
+  // Calculate h(x)
+  double rho = sqrt(px * px + py * py);
+  double phi = atan2(py, px);
+  double rho_dot = (px * vx + py * vy) / rho;
+  
+  VectorXd h(3);
+  h << rho, phi, rho_dot;
 
   // Calculations
   VectorXd y = z - h;
-  MatrixXd Hjt = Hj.transpose();
-  MatrixXd S = Hj * P_ * Hjt + R_;
+  MatrixXd Ht = H_.transpose();
+  MatrixXd S = H_ * P_ * Ht + R_;
   MatrixXd Si = S.inverse();
-  MatrixXd K = P_ * Hjt * Si;
-  MatrixXd I = MatrixXd::Identity(2, 2);
+  MatrixXd K = P_ * Ht * Si;
+  MatrixXd I = MatrixXd::Identity(4, 4);
+  
+  // Retain values of phi between -pi and pi
+  while (fabs(y(1)) > M_PI){
+     if (y(1) > M_PI) {
+        y(1) = y(1) - M_PI;
+     } else {
+        y(1) = y(1) + M_PI; 
+     }
+  }
 
   // Update state
   x_ = x_ + (K * y);
-  P_ = (I - K * Hj) * P_;
+  P_ = (I - K * H_) * P_;
 }
